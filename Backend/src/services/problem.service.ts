@@ -1,7 +1,9 @@
+import sanitize from "sanitize-html";
 import { CreateProblemDTO, UpdateProblemDTO } from "../dtos/problem.dto";
 import { IProblem } from "../models/problem";
 import { IProblemRepository } from "../repositories/problem.repository";
 import { BadRequestError, NotFoundError } from "../utils/errors/app.error";
+import { sanitizeMarkDown } from "../utils/markdown.sanitize";
 
 export interface IProblemService{
     createProblem(problem:CreateProblemDTO):Promise<IProblem>;
@@ -23,7 +25,12 @@ export class ProblemService implements IProblemService {
    }
 
     async createProblem(problem: CreateProblemDTO): Promise<IProblem> {
-        return await this.problemRepository.createProblem(problem);
+        const sanitizedPayload = {
+            ...problem,
+            description:await sanitize(problem.description),
+            editorial:problem.editorial && await sanitize(problem.editorial)
+        }
+        return await this.problemRepository.createProblem(sanitizedPayload);
 
     }
 
@@ -46,7 +53,17 @@ export class ProblemService implements IProblemService {
             throw new NotFoundError("Problem not Found");
 
         }
-        return problem;
+        const sanitizedPayload:Partial<IProblem> = {
+            ...updateData
+        }
+        if(updateData.description){
+            sanitizedPayload.description = await sanitizeMarkDown(updateData.description);
+        }
+        if(updateData.editorial){
+            sanitizedPayload.editorial = await sanitizeMarkDown(updateData.editorial);
+        }
+
+        return await this.problemRepository.updateProblem(id,updateData);
     }
 
     async updateProblems(id:string, updateData:UpdateProblemDTO):Promise<IProblem | null>{
@@ -66,6 +83,7 @@ export class ProblemService implements IProblemService {
         }
         return result;
     }
+
     async findByDifficulty(difficulty: "easy" | "medium" | "hard"): Promise<IProblem[]> {
         return await this.problemRepository.findByDifficulty(difficulty);
     }
